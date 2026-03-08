@@ -285,6 +285,19 @@ pub struct Config {
     /// If unset the feature is disabled.
     pub notify: Option<Vec<String>>,
 
+    /// Optional external command to gate tool invocations. When set, Codex
+    /// spawns this program **before** executing any tool call, passing the full
+    /// hook payload as a JSON argument. Exit code 0 allows the tool call to
+    /// proceed; any non-zero exit code aborts it.
+    ///
+    /// Example `~/.codex/config.toml` snippet:
+    ///
+    /// ```toml
+    /// [hooks]
+    /// before_tool_use = ["/usr/local/bin/my-gate"]
+    /// ```
+    pub before_tool_use: Option<Vec<String>>,
+
     /// TUI notifications preference. When set, the TUI will send terminal notifications on
     /// approvals and turn completions when not focused.
     pub tui_notifications: Notifications,
@@ -1082,6 +1095,10 @@ pub struct ConfigToml {
     /// Optional external command to spawn for end-user notifications.
     #[serde(default)]
     pub notify: Option<Vec<String>>,
+
+    /// Hook configuration (`[hooks]` table).
+    #[serde(default)]
+    pub hooks: Option<crate::config::types::HooksConfigToml>,
 
     /// System instructions.
     pub instructions: Option<String>,
@@ -2354,6 +2371,7 @@ impl Config {
             },
             enforce_residency: enforce_residency.value,
             notify: cfg.notify,
+            before_tool_use: cfg.hooks.as_ref().and_then(|h| h.before_tool_use.clone()),
             user_instructions,
             base_instructions,
             personality,

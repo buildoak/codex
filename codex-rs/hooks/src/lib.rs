@@ -1,3 +1,4 @@
+mod command_hook;
 mod engine;
 pub mod events;
 mod legacy_notify;
@@ -27,3 +28,4 @@ pub use types::HookResult;
 pub use types::HookToolInput;
 pub use types::HookToolInputLocalShell;
 pub use types::HookToolKind;
+pub use command_hook::command_hook;

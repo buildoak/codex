@@ -368,6 +368,16 @@ pub struct FeedbackConfigToml {
     pub enabled: Option<bool>,
 }
 
+/// Hooks settings loaded from the `[hooks]` table in config.toml.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct HooksConfigToml {
+    /// External command invoked before each tool call. The full hook payload is
+    /// appended as a JSON argument. Exit code 0 allows the call; non-zero aborts.
+    #[serde(default)]
+    pub before_tool_use: Option<Vec<String>>,
+}
+
 /// Memories settings loaded from config.toml.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema)]
 #[schemars(deny_unknown_fields)]
