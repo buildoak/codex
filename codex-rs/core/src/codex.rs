@@ -283,7 +283,7 @@ use crate::tools::ToolRouter;
 use crate::tools::context::SharedTurnDiffTracker;
 use crate::tools::handlers::SEARCH_TOOL_BM25_TOOL_NAME;
 use crate::tools::js_repl::JsReplHandle;
-use crate::tools::js_repl::resolve_compatible_node;
+use crate::tools::js_repl::validate_js_repl_runtime;
 use crate::tools::network_approval::NetworkApprovalService;
 use crate::tools::network_approval::build_blocked_request_observer;
 use crate::tools::network_approval::build_network_policy_decider;
@@ -383,17 +383,21 @@ impl Codex {
         }
 
         if config.features.enabled(Feature::JsRepl)
-            && let Err(err) = resolve_compatible_node(config.js_repl_node_path.as_deref()).await
+            && let Err(err) = validate_js_repl_runtime(
+                config.experimental_js_repl_runtime_command.as_deref(),
+                config.js_repl_node_path.as_deref(),
+            )
+            .await
         {
             let _ = config.features.disable(Feature::JsRepl);
             let _ = config.features.disable(Feature::JsReplToolsOnly);
             let message = if config.features.enabled(Feature::JsRepl) {
                 format!(
-                    "`js_repl` remains enabled because enterprise requirements pin it on, but the configured Node runtime is unavailable or incompatible. {err}"
+                    "`js_repl` remains enabled because enterprise requirements pin it on, but the configured experimental js_repl runtime is unavailable or invalid. {err}"
                 )
             } else {
                 format!(
-                    "Disabled `js_repl` for this session because the configured Node runtime is unavailable or incompatible. {err}"
+                    "Disabled `js_repl` for this session because the configured experimental js_repl runtime is unavailable or invalid. {err}"
                 )
             };
             warn!("{message}");
@@ -1582,9 +1586,10 @@ impl Session {
                 Self::build_model_client_beta_features_header(config.as_ref()),
             ),
         };
-        let js_repl = Arc::new(JsReplHandle::with_node_path(
+        let js_repl = Arc::new(JsReplHandle::with_runtime_config(
             config.js_repl_node_path.clone(),
             config.js_repl_node_module_dirs.clone(),
+            config.experimental_js_repl_runtime_command.clone(),
         ));
 
         let sess = Arc::new(Session {

@@ -2105,9 +2105,10 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
             Session::build_model_client_beta_features_header(config.as_ref()),
         ),
     };
-    let js_repl = Arc::new(JsReplHandle::with_node_path(
+    let js_repl = Arc::new(JsReplHandle::with_runtime_config(
         config.js_repl_node_path.clone(),
         config.js_repl_node_module_dirs.clone(),
+        config.experimental_js_repl_runtime_command.clone(),
     ));
 
     let skills_outcome = Arc::new(services.skills_manager.skills_for_config(&per_turn_config));
@@ -2512,9 +2513,10 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
             Session::build_model_client_beta_features_header(config.as_ref()),
         ),
     };
-    let js_repl = Arc::new(JsReplHandle::with_node_path(
+    let js_repl = Arc::new(JsReplHandle::with_runtime_config(
         config.js_repl_node_path.clone(),
         config.js_repl_node_module_dirs.clone(),
+        config.experimental_js_repl_runtime_command.clone(),
     ));
 
     let skills_outcome = Arc::new(services.skills_manager.skills_for_config(&per_turn_config));

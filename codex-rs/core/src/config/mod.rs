@@ -420,6 +420,10 @@ pub struct Config {
     /// Ordered list of directories to search for Node modules in `js_repl`.
     pub js_repl_node_module_dirs: Vec<PathBuf>,
 
+    /// Experimental / do not use. Optional external stdio command used instead
+    /// of the built-in Node kernel for `js_repl`.
+    pub experimental_js_repl_runtime_command: Option<Vec<String>>,
+
     /// Optional absolute path to patched zsh used by zsh-exec-bridge-backed shell execution.
     pub zsh_path: Option<PathBuf>,
 
@@ -1162,6 +1166,11 @@ pub struct ConfigToml {
     /// Ordered list of directories to search for Node modules in `js_repl`.
     pub js_repl_node_module_dirs: Option<Vec<AbsolutePathBuf>>,
 
+    /// Experimental / do not use. Optional external stdio command used instead
+    /// of the built-in Node kernel for `js_repl`.
+    #[schemars(skip)]
+    pub experimental_js_repl_runtime_command: Option<Vec<String>>,
+
     /// Optional absolute path to patched zsh used by zsh-exec-bridge-backed shell execution.
     pub zsh_path: Option<AbsolutePathBuf>,
 
@@ -1680,6 +1689,7 @@ pub struct ConfigOverrides {
     pub main_execve_wrapper_exe: Option<PathBuf>,
     pub js_repl_node_path: Option<PathBuf>,
     pub js_repl_node_module_dirs: Option<Vec<PathBuf>>,
+    pub experimental_js_repl_runtime_command: Option<Vec<String>>,
     pub zsh_path: Option<PathBuf>,
     pub base_instructions: Option<String>,
     pub developer_instructions: Option<String>,
@@ -1844,6 +1854,7 @@ impl Config {
             main_execve_wrapper_exe,
             js_repl_node_path: js_repl_node_path_override,
             js_repl_node_module_dirs: js_repl_node_module_dirs_override,
+            experimental_js_repl_runtime_command: experimental_js_repl_runtime_command_override,
             zsh_path: zsh_path_override,
             base_instructions,
             developer_instructions,
@@ -2247,6 +2258,9 @@ impl Config {
                     .map(|dirs| dirs.into_iter().map(Into::into).collect::<Vec<PathBuf>>())
             })
             .unwrap_or_default();
+        let experimental_js_repl_runtime_command = experimental_js_repl_runtime_command_override
+            .or(config_profile.experimental_js_repl_runtime_command)
+            .or(cfg.experimental_js_repl_runtime_command);
         let zsh_path = zsh_path_override
             .or(config_profile.zsh_path.map(Into::into))
             .or(cfg.zsh_path.map(Into::into));
@@ -2409,6 +2423,7 @@ impl Config {
             main_execve_wrapper_exe,
             js_repl_node_path,
             js_repl_node_module_dirs,
+            experimental_js_repl_runtime_command,
             zsh_path,
 
             hide_agent_reasoning: cfg.hide_agent_reasoning.unwrap_or(false),

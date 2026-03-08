@@ -3048,6 +3048,7 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             main_execve_wrapper_exe: None,
             js_repl_node_path: None,
             js_repl_node_module_dirs: Vec::new(),
+            experimental_js_repl_runtime_command: None,
             zsh_path: None,
             hide_agent_reasoning: false,
             show_raw_agent_reasoning: false,
@@ -3183,6 +3184,7 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         main_execve_wrapper_exe: None,
         js_repl_node_path: None,
         js_repl_node_module_dirs: Vec::new(),
+        experimental_js_repl_runtime_command: None,
         zsh_path: None,
         hide_agent_reasoning: false,
         show_raw_agent_reasoning: false,
@@ -3316,6 +3318,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         main_execve_wrapper_exe: None,
         js_repl_node_path: None,
         js_repl_node_module_dirs: Vec::new(),
+        experimental_js_repl_runtime_command: None,
         zsh_path: None,
         hide_agent_reasoning: false,
         show_raw_agent_reasoning: false,
@@ -3435,6 +3438,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         main_execve_wrapper_exe: None,
         js_repl_node_path: None,
         js_repl_node_module_dirs: Vec::new(),
+        experimental_js_repl_runtime_command: None,
         zsh_path: None,
         hide_agent_reasoning: false,
         show_raw_agent_reasoning: false,
@@ -3982,6 +3986,41 @@ allow_login_shell = false
     )?;
 
     assert!(!config.permissions.allow_login_shell);
+    Ok(())
+}
+
+#[test]
+fn config_loads_experimental_js_repl_runtime_command_from_toml() -> std::io::Result<()> {
+    let codex_home = TempDir::new()?;
+    let cfg: ConfigToml = toml::from_str(
+        r#"
+model = "gpt-5.1"
+experimental_js_repl_runtime_command = ["/usr/bin/env", "poliwhirl-codex-kernel"]
+"#,
+    )
+    .expect("TOML deserialization should succeed for experimental js_repl runtime command");
+
+    assert_eq!(
+        cfg.experimental_js_repl_runtime_command,
+        Some(vec![
+            "/usr/bin/env".to_string(),
+            "poliwhirl-codex-kernel".to_string(),
+        ])
+    );
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        codex_home.path().to_path_buf(),
+    )?;
+
+    assert_eq!(
+        config.experimental_js_repl_runtime_command,
+        Some(vec![
+            "/usr/bin/env".to_string(),
+            "poliwhirl-codex-kernel".to_string(),
+        ])
+    );
     Ok(())
 }
 

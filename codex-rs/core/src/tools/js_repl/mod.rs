@@ -64,6 +64,7 @@ const JS_REPL_TOOL_RESPONSE_TEXT_PREVIEW_MAX_BYTES: usize = 512;
 pub(crate) struct JsReplHandle {
     node_path: Option<PathBuf>,
     node_module_dirs: Vec<PathBuf>,
+    runtime_command: Option<Vec<String>>,
     cell: OnceCell<Arc<JsReplManager>>,
 }
 
@@ -74,13 +75,23 @@ impl fmt::Debug for JsReplHandle {
 }
 
 impl JsReplHandle {
+    #[cfg(test)]
     pub(crate) fn with_node_path(
         node_path: Option<PathBuf>,
         node_module_dirs: Vec<PathBuf>,
     ) -> Self {
+        Self::with_runtime_config(node_path, node_module_dirs, None)
+    }
+
+    pub(crate) fn with_runtime_config(
+        node_path: Option<PathBuf>,
+        node_module_dirs: Vec<PathBuf>,
+        runtime_command: Option<Vec<String>>,
+    ) -> Self {
         Self {
             node_path,
             node_module_dirs,
+            runtime_command,
             cell: OnceCell::new(),
         }
     }
@@ -88,7 +99,12 @@ impl JsReplHandle {
     pub(crate) async fn manager(&self) -> Result<Arc<JsReplManager>, FunctionCallError> {
         self.cell
             .get_or_try_init(|| async {
-                JsReplManager::new(self.node_path.clone(), self.node_module_dirs.clone()).await
+                JsReplManager::new(
+                    self.node_path.clone(),
+                    self.node_module_dirs.clone(),
+                    self.runtime_command.clone(),
+                )
+                .await
             })
             .await
             .cloned()
@@ -307,6 +323,7 @@ fn with_model_kernel_failure_message(
 pub struct JsReplManager {
     node_path: Option<PathBuf>,
     node_module_dirs: Vec<PathBuf>,
+    runtime_command: Option<Vec<String>>,
     tmp_dir: tempfile::TempDir,
     kernel: Arc<Mutex<Option<KernelState>>>,
     exec_lock: Arc<tokio::sync::Semaphore>,
@@ -317,6 +334,7 @@ impl JsReplManager {
     async fn new(
         node_path: Option<PathBuf>,
         node_module_dirs: Vec<PathBuf>,
+        runtime_command: Option<Vec<String>>,
     ) -> Result<Arc<Self>, FunctionCallError> {
         let tmp_dir = tempfile::tempdir().map_err(|err| {
             FunctionCallError::RespondToModel(format!("failed to create js_repl temp dir: {err}"))
@@ -325,6 +343,7 @@ impl JsReplManager {
         let manager = Arc::new(Self {
             node_path,
             node_module_dirs,
+            runtime_command,
             tmp_dir,
             kernel: Arc::new(Mutex::new(None)),
             exec_lock: Arc::new(tokio::sync::Semaphore::new(1)),
@@ -808,12 +827,22 @@ impl JsReplManager {
         turn: Arc<TurnContext>,
         thread_id: Option<ThreadId>,
     ) -> Result<KernelState, String> {
-        let node_path = resolve_compatible_node(self.node_path.as_deref()).await?;
-
-        let kernel_path = self
-            .write_kernel_script()
-            .await
-            .map_err(|err| err.to_string())?;
+        let (program, args) = if let Some(runtime_command) = self.runtime_command.as_deref() {
+            resolve_external_runtime_command(runtime_command)?
+        } else {
+            let node_path = resolve_compatible_node(self.node_path.as_deref()).await?;
+            let kernel_path = self
+                .write_kernel_script()
+                .await
+                .map_err(|err| err.to_string())?;
+            (
+                node_path.to_string_lossy().to_string(),
+                vec![
+                    "--experimental-vm-modules".to_string(),
+                    kernel_path.to_string_lossy().to_string(),
+                ],
+            )
+        };
 
         let mut env = create_env(&turn.shell_environment_policy, thread_id);
         env.insert(
@@ -831,11 +860,8 @@ impl JsReplManager {
         }
 
         let spec = CommandSpec {
-            program: node_path.to_string_lossy().to_string(),
-            args: vec![
-                "--experimental-vm-modules".to_string(),
-                kernel_path.to_string_lossy().to_string(),
-            ],
+            program,
+            args,
             cwd: turn.cwd.clone(),
             env,
             expiration: ExecExpiration::DefaultTimeout,
@@ -900,7 +926,7 @@ impl JsReplManager {
 
         let mut child = cmd
             .spawn()
-            .map_err(|err| format!("failed to start Node runtime: {err}"))?;
+            .map_err(|err| format!("failed to start js_repl runtime: {err}"))?;
         let stdout = child
             .stdout
             .take()
@@ -1698,6 +1724,44 @@ async fn ensure_node_version(node_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn resolve_external_runtime_command(command: &[String]) -> Result<(String, Vec<String>), String> {
+    let Some((program, args)) = command.split_first() else {
+        return Err("js_repl runtime command is empty".to_string());
+    };
+    if program.trim().is_empty() {
+        return Err("js_repl runtime command program is empty".to_string());
+    }
+
+    let program_path = Path::new(program);
+    if program_path.is_absolute() {
+        if !program_path.exists() {
+            return Err(format!(
+                "js_repl runtime command not found: {}",
+                program_path.display()
+            ));
+        }
+    } else if which::which(program).is_err() {
+        return Err(format!(
+            "js_repl runtime command not found on PATH: {program}"
+        ));
+    }
+
+    Ok((program.clone(), args.to_vec()))
+}
+
+pub(crate) async fn validate_js_repl_runtime(
+    runtime_command: Option<&[String]>,
+    node_path: Option<&Path>,
+) -> Result<(), String> {
+    if let Some(runtime_command) = runtime_command {
+        let _ = resolve_external_runtime_command(runtime_command)?;
+        Ok(())
+    } else {
+        let _ = resolve_compatible_node(node_path).await?;
+        Ok(())
+    }
+}
+
 pub(crate) async fn resolve_compatible_node(config_path: Option<&Path>) -> Result<PathBuf, String> {
     let node_path = resolve_node(config_path).ok_or_else(|| {
         "Node runtime not found; install Node or set CODEX_JS_REPL_NODE_PATH".to_string()
@@ -1771,6 +1835,41 @@ mod tests {
                 patch: 0,
             }
         );
+    }
+
+    #[test]
+    fn external_runtime_command_requires_program() {
+        let err = resolve_external_runtime_command(&[]).expect_err("empty command should fail");
+        assert_eq!(err, "js_repl runtime command is empty");
+
+        let err = resolve_external_runtime_command(&["".to_string()])
+            .expect_err("blank program should fail");
+        assert_eq!(err, "js_repl runtime command program is empty");
+    }
+
+    #[test]
+    fn external_runtime_command_accepts_existing_absolute_path() {
+        let current_exe = std::env::current_exe().expect("resolve current executable");
+        let command = vec![
+            current_exe.to_string_lossy().to_string(),
+            "--version".to_string(),
+        ];
+        let (program, args) =
+            resolve_external_runtime_command(&command).expect("command should validate");
+
+        assert_eq!(program, current_exe.to_string_lossy());
+        assert_eq!(args, vec!["--version".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn validate_js_repl_runtime_prefers_external_command_over_node_checks() {
+        let current_exe = std::env::current_exe().expect("resolve current executable");
+        let command = vec![current_exe.to_string_lossy().to_string()];
+        let missing_node = Path::new("/definitely/missing/node");
+
+        validate_js_repl_runtime(Some(&command), Some(missing_node))
+            .await
+            .expect("external command should bypass node validation");
     }
 
     #[test]
@@ -1932,7 +2031,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn reset_waits_for_exec_lock_before_clearing_exec_tool_calls() {
-        let manager = JsReplManager::new(None, Vec::new())
+        let manager = JsReplManager::new(None, Vec::new(), None)
             .await
             .expect("manager should initialize");
         let permit = manager
@@ -2106,7 +2205,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn reset_clears_inflight_exec_tool_calls_without_waiting() {
-        let manager = JsReplManager::new(None, Vec::new())
+        let manager = JsReplManager::new(None, Vec::new(), None)
             .await
             .expect("manager should initialize");
         let exec_id = Uuid::new_v4().to_string();
@@ -2139,7 +2238,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn reset_aborts_inflight_exec_tool_tasks() {
-        let manager = JsReplManager::new(None, Vec::new())
+        let manager = JsReplManager::new(None, Vec::new(), None)
             .await
             .expect("manager should initialize");
         let exec_id = Uuid::new_v4().to_string();

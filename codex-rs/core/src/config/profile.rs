@@ -39,6 +39,10 @@ pub struct ConfigProfile {
     pub js_repl_node_path: Option<AbsolutePathBuf>,
     /// Ordered list of directories to search for Node modules in `js_repl`.
     pub js_repl_node_module_dirs: Option<Vec<AbsolutePathBuf>>,
+    /// Experimental / do not use. Optional external stdio command used instead
+    /// of the built-in Node kernel for `js_repl`.
+    #[schemars(skip)]
+    pub experimental_js_repl_runtime_command: Option<Vec<String>>,
     /// Optional absolute path to patched zsh used by zsh-exec-bridge-backed shell execution.
     pub zsh_path: Option<AbsolutePathBuf>,
     /// Deprecated: ignored. Use `model_instructions_file`.

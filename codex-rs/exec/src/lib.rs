@@ -311,6 +311,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
         js_repl_node_path: None,
         js_repl_node_module_dirs: None,
+        experimental_js_repl_runtime_command: None,
         zsh_path: None,
         base_instructions: None,
         developer_instructions: None,

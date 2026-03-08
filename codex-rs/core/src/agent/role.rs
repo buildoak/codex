@@ -122,6 +122,9 @@ pub(crate) async fn apply_role_to_config(
             codex_linux_sandbox_exe: config.codex_linux_sandbox_exe.clone(),
             main_execve_wrapper_exe: config.main_execve_wrapper_exe.clone(),
             js_repl_node_path: config.js_repl_node_path.clone(),
+            experimental_js_repl_runtime_command: config
+                .experimental_js_repl_runtime_command
+                .clone(),
             ..Default::default()
         },
         config.codex_home.clone(),
