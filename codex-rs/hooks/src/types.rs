@@ -122,6 +122,19 @@ pub enum HookToolInput {
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+pub struct HookEventBeforeToolUse {
+    pub turn_id: String,
+    pub call_id: String,
+    pub tool_name: String,
+    pub tool_kind: HookToolKind,
+    pub tool_input: HookToolInput,
+    pub mutating: bool,
+    pub sandbox: String,
+    pub sandbox_policy: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub struct HookEventAfterToolUse {
     pub turn_id: String,
     pub call_id: String,
@@ -150,6 +163,10 @@ pub enum HookEvent {
     AfterAgent {
         #[serde(flatten)]
         event: HookEventAfterAgent,
+    },
+    BeforeToolUse {
+        #[serde(flatten)]
+        event: HookEventBeforeToolUse,
     },
     AfterToolUse {
         #[serde(flatten)]
