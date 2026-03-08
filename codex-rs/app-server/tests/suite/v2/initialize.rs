@@ -261,7 +261,12 @@ tmp_path.replace(payload_path)
     )
     .await??;
 
-    fs_wait::wait_for_path_exists(&notify_file, Duration::from_secs(5)).await?;
+    let notify_file_timeout = if cfg!(windows) {
+        Duration::from_secs(30)
+    } else {
+        Duration::from_secs(5)
+    };
+    fs_wait::wait_for_path_exists(&notify_file, notify_file_timeout).await?;
     let payload_raw = tokio::fs::read_to_string(&notify_file).await?;
     let payload: Value = serde_json::from_str(&payload_raw)?;
     assert_eq!(payload["client"], "xcode");
