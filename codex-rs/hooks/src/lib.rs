@@ -6,6 +6,8 @@ mod registry;
 mod schema;
 mod types;
 
+pub use command_hook::after_tool_use_command_hook;
+pub use command_hook::command_hook;
 pub use events::session_start::SessionStartOutcome;
 pub use events::session_start::SessionStartRequest;
 pub use events::session_start::SessionStartSource;
@@ -28,4 +30,3 @@ pub use types::HookResult;
 pub use types::HookToolInput;
 pub use types::HookToolInputLocalShell;
 pub use types::HookToolKind;
-pub use command_hook::command_hook;

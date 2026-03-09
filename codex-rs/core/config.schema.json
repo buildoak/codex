@@ -686,6 +686,29 @@
         }
       ]
     },
+    "HooksConfigToml": {
+      "additionalProperties": false,
+      "description": "Hooks settings loaded from the `[hooks]` table in config.toml.",
+      "properties": {
+        "after_tool_use": {
+          "default": null,
+          "description": "External command invoked after each tool call. Receives the full hook payload (including tool output) as a JSON argument. Can return modified output on stdout.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "before_tool_use": {
+          "default": null,
+          "description": "External command invoked before each tool call. The full hook payload is appended as a JSON argument. Exit code 0 allows the call; non-zero aborts.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "MemoriesToml": {
       "additionalProperties": false,
       "description": "Memories settings loaded from config.toml.",
@@ -2047,6 +2070,15 @@
       ],
       "default": null,
       "description": "Settings that govern if and what will be written to `~/.codex/history.jsonl`."
+    },
+    "hooks": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/HooksConfigToml"
+        }
+      ],
+      "default": null,
+      "description": "Hook configuration (`[hooks]` table)."
     },
     "instructions": {
       "description": "System instructions.",

@@ -282,9 +282,19 @@ impl ToolRegistry {
             Err(err) => (err.to_string(), false),
         };
         emit_metric_for_tool_read(&invocation, success).await;
-        let hook_abort_error = dispatch_after_tool_use_hook(AfterToolUseHookDispatch {
+        let full_tool_output = {
+            let guard = response_cell.lock().await;
+            guard.as_ref().map(|any_result| {
+                let response_item = any_result
+                    .result
+                    .to_response_item(&any_result.call_id, &any_result.payload);
+                serde_json::to_string(&response_item).unwrap_or_default()
+            })
+        };
+        let hook_result = dispatch_after_tool_use_hook(AfterToolUseHookDispatch {
             invocation: &invocation,
             output_preview,
+            tool_output: full_tool_output,
             success,
             executed: true,
             duration,
@@ -292,19 +302,30 @@ impl ToolRegistry {
         })
         .await;
 
-        if let Some(err) = hook_abort_error {
-            return Err(err);
-        }
-
-        match result {
-            Ok(_) => {
-                let mut guard = response_cell.lock().await;
-                let result = guard.take().ok_or_else(|| {
-                    FunctionCallError::Fatal("tool produced no output".to_string())
-                })?;
-                Ok(result)
-            }
+        match hook_result {
             Err(err) => Err(err),
+            Ok(Some(modified_output)) => match result {
+                Ok(_) => {
+                    use crate::tools::context::FunctionToolOutput;
+                    let output = FunctionToolOutput::from_text(modified_output, Some(true));
+                    Ok(AnyToolResult {
+                        call_id: call_id_owned,
+                        payload: payload_for_response,
+                        result: Box::new(output),
+                    })
+                }
+                Err(err) => Err(err),
+            },
+            Ok(None) => match result {
+                Ok(_) => {
+                    let mut guard = response_cell.lock().await;
+                    let any_result = guard.take().ok_or_else(|| {
+                        FunctionCallError::Fatal("tool produced no output".to_string())
+                    })?;
+                    Ok(any_result)
+                }
+                Err(err) => Err(err),
+            },
         }
     }
 }
@@ -491,6 +512,9 @@ async fn dispatch_before_tool_use_hook(
         let hook_name = hook_outcome.hook_name;
         match hook_outcome.result {
             HookResult::Success => {}
+            HookResult::SuccessWithModifiedOutput(_) => {
+                // before_tool_use does not support output modification; treat as Success.
+            }
             HookResult::FailedContinue(error) => {
                 warn!(
                     call_id = %invocation.call_id,
@@ -521,6 +545,7 @@ async fn dispatch_before_tool_use_hook(
 struct AfterToolUseHookDispatch<'a> {
     invocation: &'a ToolInvocation,
     output_preview: String,
+    tool_output: Option<String>,
     success: bool,
     executed: bool,
     duration: Duration,
@@ -529,8 +554,16 @@ struct AfterToolUseHookDispatch<'a> {
 
 async fn dispatch_after_tool_use_hook(
     dispatch: AfterToolUseHookDispatch<'_>,
-) -> Option<FunctionCallError> {
-    let AfterToolUseHookDispatch { invocation, .. } = dispatch;
+) -> Result<Option<String>, FunctionCallError> {
+    let AfterToolUseHookDispatch {
+        invocation,
+        output_preview,
+        tool_output,
+        success,
+        executed,
+        duration,
+        mutating,
+    } = dispatch;
     let session = invocation.session.as_ref();
     let turn = invocation.turn.as_ref();
     let tool_input = HookToolInput::from(&invocation.payload);
@@ -548,10 +581,10 @@ async fn dispatch_after_tool_use_hook(
                     tool_name: invocation.tool_name.clone(),
                     tool_kind: hook_tool_kind(&tool_input),
                     tool_input,
-                    executed: dispatch.executed,
-                    success: dispatch.success,
-                    duration_ms: u64::try_from(dispatch.duration.as_millis()).unwrap_or(u64::MAX),
-                    mutating: dispatch.mutating,
+                    executed,
+                    success,
+                    duration_ms: u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+                    mutating,
                     sandbox: sandbox_tag(
                         &turn.sandbox_policy,
                         turn.windows_sandbox_level,
@@ -559,16 +592,21 @@ async fn dispatch_after_tool_use_hook(
                     )
                     .to_string(),
                     sandbox_policy: sandbox_policy_tag(&turn.sandbox_policy).to_string(),
-                    output_preview: dispatch.output_preview.clone(),
+                    output_preview,
+                    tool_output,
                 },
             },
         })
         .await;
 
+    let mut modified_output: Option<String> = None;
     for hook_outcome in hook_outcomes {
         let hook_name = hook_outcome.hook_name;
         match hook_outcome.result {
             HookResult::Success => {}
+            HookResult::SuccessWithModifiedOutput(output) => {
+                modified_output = Some(output);
+            }
             HookResult::FailedContinue(error) => {
                 warn!(
                     call_id = %invocation.call_id,
@@ -586,12 +624,12 @@ async fn dispatch_after_tool_use_hook(
                     error = %error,
                     "after_tool_use hook failed; aborting operation"
                 );
-                return Some(FunctionCallError::Fatal(format!(
+                return Err(FunctionCallError::Fatal(format!(
                     "after_tool_use hook '{hook_name}' failed and aborted operation: {error}"
                 )));
             }
         }
     }
 
-    None
+    Ok(modified_output)
 }

@@ -297,6 +297,8 @@ pub struct Config {
     /// before_tool_use = ["/usr/local/bin/my-gate"]
     /// ```
     pub before_tool_use: Option<Vec<String>>,
+    /// External command invoked after each tool call, from `[hooks].after_tool_use`.
+    pub after_tool_use: Option<Vec<String>>,
 
     /// TUI notifications preference. When set, the TUI will send terminal notifications on
     /// approvals and turn completions when not focused.
@@ -2372,6 +2374,7 @@ impl Config {
             enforce_residency: enforce_residency.value,
             notify: cfg.notify,
             before_tool_use: cfg.hooks.as_ref().and_then(|h| h.before_tool_use.clone()),
+            after_tool_use: cfg.hooks.as_ref().and_then(|h| h.after_tool_use.clone()),
             user_instructions,
             base_instructions,
             personality,

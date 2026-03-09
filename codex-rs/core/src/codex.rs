@@ -1581,6 +1581,7 @@ impl Session {
         let hooks = Hooks::new(HooksConfig {
             legacy_notify_argv: config.notify.clone(),
             before_tool_use_argv: config.before_tool_use.clone(),
+            after_tool_use_argv: config.after_tool_use.clone(),
             feature_enabled: config.features.enabled(Feature::CodexHooks),
             config_layer_stack: Some(config.config_layer_stack.clone()),
             shell_program: Some(hook_shell_program),
@@ -5765,6 +5766,9 @@ pub(crate) async fn run_turn(
                         let hook_name = hook_outcome.hook_name;
                         match hook_outcome.result {
                             HookResult::Success => {}
+                            HookResult::SuccessWithModifiedOutput(_) => {
+                                // after_agent does not support output modification; treat as Success.
+                            }
                             HookResult::FailedContinue(error) => {
                                 warn!(
                                     turn_id = %turn_context.sub_id,

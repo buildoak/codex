@@ -16,6 +16,8 @@ pub type HookFn = Arc<dyn for<'a> Fn(&'a HookPayload) -> BoxFuture<'a, HookResul
 pub enum HookResult {
     /// Success: hook completed successfully.
     Success,
+    /// Hook succeeded and provides a replacement tool output string.
+    SuccessWithModifiedOutput(String),
     /// FailedContinue: hook failed, but other subsequent hooks should still execute and the
     /// operation should continue.
     FailedContinue(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -148,6 +150,9 @@ pub struct HookEventAfterToolUse {
     pub sandbox: String,
     pub sandbox_policy: String,
     pub output_preview: String,
+    /// Full serialized tool output. Only populated when after_tool_use hooks are configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_output: Option<String>,
 }
 
 fn serialize_triggered_at<S>(value: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
@@ -266,6 +271,7 @@ mod tests {
                     sandbox: "none".to_string(),
                     sandbox_policy: "danger-full-access".to_string(),
                     output_preview: "ok".to_string(),
+                    tool_output: None,
                 },
             },
         };

@@ -376,6 +376,10 @@ pub struct HooksConfigToml {
     /// appended as a JSON argument. Exit code 0 allows the call; non-zero aborts.
     #[serde(default)]
     pub before_tool_use: Option<Vec<String>>,
+    /// External command invoked after each tool call. Receives the full hook payload
+    /// (including tool output) as a JSON argument. Can return modified output on stdout.
+    #[serde(default)]
+    pub after_tool_use: Option<Vec<String>>,
 }
 
 /// Memories settings loaded from config.toml.
