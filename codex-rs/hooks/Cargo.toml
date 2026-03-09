@@ -12,12 +12,17 @@ path = "src/lib.rs"
 [lints]
 workspace = true
 
+[[example]]
+name = "compress-tool-output"
+path = "examples/compress-tool-output/main.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 codex-config = { workspace = true }
 codex-protocol = { workspace = true }
 futures = { workspace = true, features = ["alloc"] }
+once_cell = { workspace = true }
 regex = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
